@@ -15,6 +15,7 @@ class Homepage extends StatefulWidget {
 class _HomepageState extends State<Homepage> {
   final WeatherFactory _wf = WeatherFactory(OPENWEATHER_API_KEY);
   Weather? _weather;
+  List<Weather>? _forecast;
   final TextEditingController _cityController = TextEditingController();
 
   @override
@@ -26,12 +27,23 @@ class _HomepageState extends State<Homepage> {
   void _fetchWeather(String city) async {
     try {
       Weather weather = await _wf.currentWeatherByCityName(city);
+      List<Weather> fullForecast = await _wf.fiveDayForecastByCityName(city);
+
+      // Filter to get one forecast per day
+      Map<String, Weather> dailyForecastMap = {};
+      for (var weather in fullForecast) {
+        String day = DateFormat('yyyy-MM-dd').format(weather.date!);
+        if (!dailyForecastMap.containsKey(day)) {
+          dailyForecastMap[day] = weather;
+        }
+      }
+
       setState(() {
         _weather = weather;
+        _forecast = dailyForecastMap.values.toList();
       });
     } catch (e) {
       print("Error fetching weather: $e");
-      // Optionally, show an error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error fetching weather for $city")),
       );
@@ -92,27 +104,33 @@ class _HomepageState extends State<Homepage> {
     return SizedBox(
       width: MediaQuery.of(context).size.width,
       height: MediaQuery.of(context).size.height,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _locationHeader(),
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.08,
-          ),
-          _dateTimeInfo(),
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.05,
-          ),
-          _weatherIcon(),
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.02,
-          ),
-          _currentTemp(),
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.02,
-          ),
-          _extraInfo(),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _locationHeader(),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.08,
+            ),
+            _dateTimeInfo(),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.05,
+            ),
+            _weatherIcon(),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.02,
+            ),
+            _currentTemp(),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.02,
+            ),
+            _extraInfo(),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.05,
+            ),
+            _buildForecast(),
+          ],
+        ),
       ),
     );
   }
@@ -242,6 +260,45 @@ class _HomepageState extends State<Homepage> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForecast() {
+    if (_forecast == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return SizedBox(
+      height: MediaQuery.of(context).size.height * 0.3,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _forecast!.length,
+        itemBuilder: (context, index) {
+          Weather weather = _forecast![index];
+          return _forecastCard(weather);
+        },
+      ),
+    );
+  }
+
+  Widget _forecastCard(Weather weather) {
+    return Card(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(DateFormat("E, d MMM").format(weather.date!)),
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.1,
+            child: Image.network(
+              "http://openweathermap.org/img/wn/${weather.weatherIcon}@4x.png",
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(Icons.error);
+              },
+            ),
+          ),
+          Text("${weather.temperature?.celsius?.toStringAsFixed(0)}°C"),
+          Text(weather.weatherDescription ?? ""),
         ],
       ),
     );
